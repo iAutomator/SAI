@@ -244,6 +244,14 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         self.assertEqual(self.status(), SAI_STATUS_SUCCESS)
         self.default_1q_bridge = attr['default_1q_bridge_id']
 
+    def get_bridge_ports(self):
+        attr = sai_thrift_get_bridge_attribute(
+            self.client, 
+            bridge_oid=self.default_1q_bridge,
+            port_list=sai_thrift_object_list_t(idlist=[], count=self.active_ports_no)
+        )
+        self.assertEqual(self.status(), SAI_STATUS_SUCCESS)
+        self.def_bridge_port_list = attr['port_list'].idlist
 
     def reset_1q_bridge_ports(self):
         '''
@@ -257,8 +265,9 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         '''
         #TODO check if this is common behivor or specified after check on more platform
         #TODO move this function to CommonSaiHelper
-        print("For Common platform, expecting bridge ports not been created by default.")
-
+        self.get_default_1q_bridge_id()
+        self.get_bridge_ports()
+        self.destroy_bridge_ports()
 
     def check_cpu_port_hdl(self):
         """
@@ -398,6 +407,9 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         attr = sai_thrift_get_switch_attribute(
             self.client, number_of_active_ports=True)
         self.active_ports_no = attr['number_of_active_ports']
+
+        self.reset_1q_bridge_ports()
+        
         attr = sai_thrift_get_switch_attribute(
             self.client, port_list=sai_thrift_object_list_t(
                 idlist=[], count=self.active_ports_no))
@@ -1008,6 +1020,8 @@ class MinimalPortVlanConfig(SaiHelperBase):
             sai_thrift_set_port_attribute(
                 self.client, port, port_vlan_id=0)
 
+        self.destroy_bridge_ports()
+
         # remove ports from vlan
         for vlan_member in self.def_vlan_member_list:
             sai_thrift_remove_vlan_member(self.client, vlan_member)
@@ -1015,9 +1029,6 @@ class MinimalPortVlanConfig(SaiHelperBase):
         # remove vlan
         sai_thrift_remove_vlan(self.client, self.vlan)
 
-        # remove bridge ports
-        for bridge_port in self.def_bridge_port_list:
-            sai_thrift_remove_bridge_port(self.client, bridge_port)
 
         super(MinimalPortVlanConfig, self).tearDown()
 
