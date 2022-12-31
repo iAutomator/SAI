@@ -224,7 +224,29 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         #TODO check if this is common behivor or specified after check on more platform
         if 'port_config_ini' in self.test_params:
             if 'createPorts_has_been_called' not in config:
+                # Remove default VLAN members
+                attr = sai_thrift_get_vlan_attribute(
+                    self.client,
+                    self.default_vlan_id,
+                    member_list=sai_thrift_object_list_t(count=100)
+                )
+                vlan_members = attr['SAI_VLAN_ATTR_MEMBER_LIST'].idlist
+                for vlan_member in vlan_members:
+                    sai_thrift_remove_vlan_member(self.client, vlan_member)
+
+                # Remove default .1q bridge ports
+                attr = sai_thrift_get_bridge_attribute(
+                    self.client,
+                    bridge_oid=self.default_1q_bridge,
+                    port_list=sai_thrift_object_list_t(count=100)
+                )
+                bridge_ports = attr['SAI_BRIDGE_ATTR_PORT_LIST'].idlist
+                for bridge_port in bridge_ports:
+                    sai_thrift_remove_bridge_port(self.client, bridge_port)
+
+                # Re-create ports
                 self.createPorts()
+
                 # check if ports became UP
                 #self.checkPortsUp()
                 config['createPorts_has_been_called'] = 1
@@ -337,11 +359,6 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         self.default_vlan_id = attr['default_vlan_id']
         self.assertNotEqual(self.default_vlan_id, 0)
 
-        self.recreate_ports()
-
-        # get number of active ports
-        self.get_active_port_list()
-
         # get default vrf
         attr = sai_thrift_get_switch_attribute(
             self.client, default_virtual_router_id=True)
@@ -354,7 +371,7 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         self.get_default_1q_bridge_id()
 
         #remove all default 1Q bridge port
-        self.reset_1q_bridge_ports()
+        #self.reset_1q_bridge_ports()
 
         # get cpu port
         attr = sai_thrift_get_switch_attribute(self.client, cpu_port=True)
@@ -365,13 +382,18 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
         # [3] skip to avoid assert failure on check for "parent_scheduler_node" 
         # self.check_cpu_port_hdl()
 
+        self.recreate_ports()
+
+        # get number of active ports
+        self.get_active_port_list()
+
         print("Finish SaiHelperBase setup")
 
 
     def tearDown(self):
         try:
             for port in self.port_list:
-                sai_thrift_clear_port_stats(self.client, port)
+                #sai_thrift_clear_port_stats(self.client, port)
                 sai_thrift_set_port_attribute(
                     self.client, port, port_vlan_id=0)
             #Todo: Remove this condition after brcm's remove_switch issue fixed
@@ -408,14 +430,17 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
             self.client, number_of_active_ports=True)
         self.active_ports_no = attr['number_of_active_ports']
 
-        self.reset_1q_bridge_ports()
-        
         attr = sai_thrift_get_switch_attribute(
             self.client, port_list=sai_thrift_object_list_t(
                 idlist=[], count=self.active_ports_no))
         if self.active_ports_no:
             self.port_list = attr['port_list'].idlist
             for port in self.port_list:
+                attr = sai_thrift_get_port_attribute(
+                        self.client, port, port_serdes_id=True)
+                serdes_id = attr['port_serdes_id']
+                if serdes_id != 0:
+                    sai_thrift_remove_port_serdes(self.client, serdes_id)
                 sai_thrift_remove_port(self.client, port)
 
         # add new ports from port config file
@@ -603,6 +628,9 @@ class SaiHelperBase(ThriftInterfaceDataPlane):
             available_double_nat_entry=True,
             number_of_ecmp_groups=True,
             ecmp_members=True)
+
+        if available_resources is None:
+            return True
 
         for key, value in available_resources.items():
             if value != init_resources[key]:
@@ -940,7 +968,7 @@ class SaiHelper(SaiHelperUtilsMixin, SaiHelperBase):
         # Creating route in default VRF will failed if there aren't default routes.
         # Solution
         # Create default route before create route in detaul VRF
-        self.create_default_v4_v6_route_entry()
+        #self.create_default_v4_v6_route_entry()
 
     def tearDown(self):
         sai_thrift_set_port_attribute(self.client, self.port2, port_vlan_id=0)
@@ -1020,8 +1048,6 @@ class MinimalPortVlanConfig(SaiHelperBase):
             sai_thrift_set_port_attribute(
                 self.client, port, port_vlan_id=0)
 
-        self.destroy_bridge_ports()
-
         # remove ports from vlan
         for vlan_member in self.def_vlan_member_list:
             sai_thrift_remove_vlan_member(self.client, vlan_member)
@@ -1029,6 +1055,9 @@ class MinimalPortVlanConfig(SaiHelperBase):
         # remove vlan
         sai_thrift_remove_vlan(self.client, self.vlan)
 
+        # remove bridge ports
+        for bridge_port in self.def_bridge_port_list:
+            sai_thrift_remove_bridge_port(self.client, bridge_port)
 
         super(MinimalPortVlanConfig, self).tearDown()
 
