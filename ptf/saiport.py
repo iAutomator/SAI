@@ -382,6 +382,24 @@ class ListPortAttributesTest(SaiHelperBase):
         self.internal_loopback_mode = None
         super(ListPortAttributesTest, self).setUp()
 
+    def clearPorts(self):
+        attr = sai_thrift_get_switch_attribute(
+        self.client, number_of_active_ports=True)
+        self.active_ports_no = attr['number_of_active_ports']
+
+        attr = sai_thrift_get_switch_attribute(
+            self.client, port_list=sai_thrift_object_list_t(
+                idlist=[], count=self.active_ports_no))
+        if self.active_ports_no:
+            self.port_list = attr['port_list'].idlist
+            for port in self.port_list:
+                attr = sai_thrift_get_port_attribute(
+                        self.client, port, port_serdes_id=True)
+                serdes_id = attr['port_serdes_id']
+                if serdes_id != 0:
+                    sai_thrift_remove_port_serdes(self.client, serdes_id)
+                sai_thrift_remove_port(self.client, port)
+
     def runTest(self):
         print("ListPortAttributesTest")
         try:
@@ -394,6 +412,8 @@ class ListPortAttributesTest(SaiHelperBase):
                 # For attribute under test set the value to
                 # scenario'test_create'. It will be the only not 'None' value
                 setattr(self, scenario['attribute'], scenario['test_create'])
+
+                self.clearPorts()
 
                 sai_list = sai_thrift_u32_list_t(count=1, uint32list=[34])
                 self.portx = sai_thrift_create_port(
