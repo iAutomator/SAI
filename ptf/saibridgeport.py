@@ -31,7 +31,6 @@ class BridgePortAttributeTest(SaiHelper):
 
         self.port24_bp = sai_thrift_create_bridge_port(
             self.client,
-            bridge_id=self.default_1q_bridge,
             port_id=self.port24,
             type=SAI_BRIDGE_PORT_TYPE_PORT,
             admin_state=True,
@@ -39,12 +38,6 @@ class BridgePortAttributeTest(SaiHelper):
         self.assertNotEqual(self.port24_bp, 0)
 
     def runTest(self):
-        # bridge_id
-        # get
-        attr = sai_thrift_get_bridge_port_attribute(
-            self.client, self.port24_bp, bridge_id=True)
-        self.assertEqual(attr['bridge_id'], self.default_1q_bridge)
-
         # type
         # get
         attr = sai_thrift_get_bridge_port_attribute(

@@ -467,12 +467,13 @@ class ListPortAttributesTest(SaiHelperBase):
                         attr[scenario['attribute']],
                         scenario['test_set'],
                         "Failed to verify Set/Get attribute")
-
-                status = sai_thrift_remove_port(self.client, self.portx)
-                self.assertEqual(status, SAI_STATUS_SUCCESS)
-                self.portx = 0
         finally:
             if self.portx != 0:
+                attr = sai_thrift_get_port_attribute(
+                        self.client, self.portx, port_serdes_id=True)
+                serdes_id = attr['port_serdes_id']
+                if serdes_id != 0:
+                    sai_thrift_remove_port_serdes(self.client, serdes_id)
                 status = sai_thrift_remove_port(self.client, self.portx)
                 self.assertEqual(status, SAI_STATUS_SUCCESS)
 
